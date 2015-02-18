@@ -66,7 +66,7 @@ class MarkdownGenerator implements IGenerator {
 		for (ch : document.chapters) {
 			val chapter = if (ch instanceof ChapterRef) ch.chapter else ch
 			val sourceFileName = getSourceFileName(chapter, i++)
-			fsa.generateFile(sourceFileName, chapter.doGenerate(document, idMap))
+			fsa.generateFile(sourceFileName, chapter.generate(idMap))
 			println('Generated ' + sourceFileName)
 		}
 		for (p : document.parts) {
@@ -74,7 +74,7 @@ class MarkdownGenerator implements IGenerator {
 			for (ch : part.chapters) {
 				val chapter = if (ch instanceof ChapterRef) ch.chapter else ch
 				val sourceFileName = getSourceFileName(chapter, i++)
-				fsa.generateFile(sourceFileName, chapter.doGenerate(document, idMap))
+				fsa.generateFile(sourceFileName, chapter.generate(idMap))
 				println('Generated ' + sourceFileName)
 			}
 		}
@@ -118,9 +118,9 @@ class MarkdownGenerator implements IGenerator {
 			index + '_' + chapter.name.toLowerCase
 	}
 	
-	private def doGenerate(Chapter chapter, Document document, Map<Identifiable, String> idMap) {
+	private def CharSequence generate(Chapter chapter, Map<Identifiable, String> idMap) {
 		val nextChapter = getNextChapter(chapter, idMap)
-		val concat = new StringConcatenation('\n')
+		val concat = new MyStringConcatenation('\n')
 		concat += '''
 			---
 			layout: documentation
@@ -128,12 +128,12 @@ class MarkdownGenerator implements IGenerator {
 		'''
 		concat.newLine
 		concat += '# '
-		chapter.title.generate(concat, idMap)
+		chapter.title.generate(concat, 0, idMap)
 		if (chapter.name != null)
 			concat += ''' {#«chapter.name.trim»}'''
 		
 		concat.ensureEmptyLine
-		chapter.contents.generateWithSeparation(concat, idMap)
+		chapter.contents.generateWithSeparation(concat, 0, idMap)
 		
 		chapter.subSections.forEach[generate(concat, idMap)]
 		
@@ -143,7 +143,7 @@ class MarkdownGenerator implements IGenerator {
 			concat.newLine
 			concat.newLine
 			concat += '**[Next Chapter: '
-			nextChapter.title.generate(concat, idMap)
+			nextChapter.title.generate(concat, 0, idMap)
 			concat += '''](«idMap.get(nextChapter)»)**'''
 		}
 		return concat
@@ -166,30 +166,16 @@ class MarkdownGenerator implements IGenerator {
 		}
 	}
 	
-	private def void generateWithSeparation(List<TextOrMarkup> contentList, StringConcatenation concat,
-			Map<Identifiable, String> idMap) {
-		contentList.forEach[ obj, i |
-			if (i > 0)
-				concat.ensureEmptyLine
-			obj.generate(concat, idMap)
-		]
-	}
-	
-	private def dispatch void generate(Object object, StringConcatenation concat,
-			Map<Identifiable, String> idMap) {
-		concat += '''UNSUPPORTED XDOC FEATURE «object.class.simpleName»'''
-	}
-	
 	private def dispatch void generate(Section section, StringConcatenation concat,
 			Map<Identifiable, String> idMap) {
 		concat.ensureEmptyLine
 		concat += '## '
-		section.title.generate(concat, idMap)
+		section.title.generate(concat, 0, idMap)
 		if (section.name != null)
 			concat += ''' {#«section.name.trim»}'''
 		
 		concat.ensureEmptyLine
-		section.contents.generateWithSeparation(concat, idMap)
+		section.contents.generateWithSeparation(concat, 0, idMap)
 		
 		section.subSections.forEach[generate(concat, idMap)]
 	}
@@ -203,12 +189,12 @@ class MarkdownGenerator implements IGenerator {
 			Map<Identifiable, String> idMap) {
 		concat.ensureEmptyLine
 		concat += '### '
-		section.title.generate(concat, idMap)
+		section.title.generate(concat, 0, idMap)
 		if (section.name != null)
 			concat += ''' {#«section.name.trim»}'''
 		
 		concat.ensureEmptyLine
-		section.contents.generateWithSeparation(concat, idMap)
+		section.contents.generateWithSeparation(concat, 0, idMap)
 		
 		section.subSections.forEach[generate(concat, idMap)]
 	}
@@ -222,12 +208,12 @@ class MarkdownGenerator implements IGenerator {
 			Map<Identifiable, String> idMap) {
 		concat.ensureEmptyLine
 		concat += '#### '
-		section.title.generate(concat, idMap)
+		section.title.generate(concat, 0, idMap)
 		if (section.name != null)
 			concat += ''' {#«section.name.trim»}'''
 		
 		concat.ensureEmptyLine
-		section.contents.generateWithSeparation(concat, idMap)
+		section.contents.generateWithSeparation(concat, 0, idMap)
 		
 		section.subSections.forEach[generate(concat, idMap)]
 	}
@@ -236,89 +222,113 @@ class MarkdownGenerator implements IGenerator {
 			Map<Identifiable, String> idMap) {
 		concat.ensureEmptyLine
 		concat += '##### '
-		section.title.generate(concat, idMap)
+		section.title.generate(concat, 0, idMap)
 		if (section.name != null)
 			concat += ''' {#«section.name.trim»}'''
 		
 		concat.ensureEmptyLine
-		section.contents.generateWithSeparation(concat, idMap)
+		section.contents.generateWithSeparation(concat, 0, idMap)
 	}
 	
-	private def dispatch void generate(TextOrMarkup textOrMarkup, StringConcatenation concat,
+	private def void generateWithSeparation(List<TextOrMarkup> contentList, StringConcatenation concat, int indent,
 			Map<Identifiable, String> idMap) {
-		textOrMarkup.contents.forEach[ obj, i |
+		contentList.forEach[ obj, i |
 			if (i > 0)
-				concat.ensureSpace
-			obj.generate(concat, idMap)
+				concat.ensureEmptyLine(indent)
+			obj.generate(concat, indent, idMap)
 		]
 	}
 	
-	private def dispatch void generate(TextPart textPart, StringConcatenation concat,
+	private def dispatch void generate(Object object, StringConcatenation concat, int indent,
 			Map<Identifiable, String> idMap) {
-		concat += textPart.text?.trim?.replaceAll('\\s+', ' ')
+		concat += '''UNSUPPORTED XDOC FEATURE «object.class.simpleName»'''
 	}
 	
-	private def dispatch void generate(Emphasize emphasize, StringConcatenation concat,
+	private def dispatch void generate(TextOrMarkup textOrMarkup, StringConcatenation concat, int indent,
 			Map<Identifiable, String> idMap) {
-		concat += '**'
-		emphasize.contents.forEach[ obj, i |
-			if (i > 0)
-				concat.ensureSpace
-			obj.generate(concat, idMap)
+		textOrMarkup.contents.forEach[
+			if (concat.endsWithNewline)
+				concat.indent(indent)
+			generate(concat, indent, idMap)
 		]
+	}
+	
+	private def dispatch void generate(TextPart textPart, StringConcatenation concat, int indent,
+			Map<Identifiable, String> idMap) {
+		if (textPart.text != null && !textPart.text.trim.empty) {
+			if (textPart.text.startsWithWhitespace && !concat.endsWithWhitespace)
+				concat += ' '
+			concat += textPart.text.trim.replaceAll('\\s+', ' ').processEscapes
+			if (textPart.text.endsWithWhitespace)
+				concat += ' '
+		}
+	}
+	
+	private def dispatch void generate(Emphasize emphasize, StringConcatenation concat, int indent,
+			Map<Identifiable, String> idMap) {
+		concat += '**'
+		emphasize.contents.forEach[generate(concat, indent, idMap)]
 		concat += '**'
 	}
 	
-	private def dispatch void generate(Anchor anchor, StringConcatenation concat,
+	private def dispatch void generate(Anchor anchor, StringConcatenation concat, int indent,
 			Map<Identifiable, String> idMap) {
 		concat += '''<a name="«anchor.name?.trim»"/>'''
 	}
 	
-	private def dispatch void generate(Ref ref, StringConcatenation concat,
+	private def dispatch void generate(Ref ref, StringConcatenation concat, int indent,
 			Map<Identifiable, String> idMap) {
 		concat += '['
-		ref.contents.forEach[ obj, i |
-			if (i > 0)
-				concat.ensureSpace
-			obj.generate(concat, idMap)
-		]
-		concat += '''](«idMap?.get(ref.ref)»#«ref.ref.name?.trim»)'''
+		ref.contents.forEach[generate(concat, indent, idMap)]
+		concat += ']('
+		concat += idMap?.get(ref.ref)
+		if (!(ref.ref instanceof Chapter)) {
+			concat += '#'
+			concat += ref.ref.name?.trim
+		}
+		concat += ')'
 	}
 	
-	private def dispatch void generate(OrderedList orderedList, StringConcatenation concat,
+	private def dispatch void generate(OrderedList orderedList, StringConcatenation concat, int indent,
 			Map<Identifiable, String> idMap) {
-		concat.ensureEmptyLine
+		concat.ensureEmptyLine(indent)
 		orderedList.items.forEach[
+			concat.indent(indent)
 			concat += '1.  '
-			contents.generateWithSeparation(concat, idMap)
+			contents.generateWithSeparation(concat, indent + 1, idMap)
+			concat.newLineIfNotEmpty
 		]
-		concat.newLineIfNotEmpty
-	}
-	
-	private def dispatch void generate(UnorderedList unorderedList, StringConcatenation concat,
-			Map<Identifiable, String> idMap) {
 		concat.ensureEmptyLine
-		unorderedList.items.forEach[
-			concat += '*   '
-			contents.generateWithSeparation(concat, idMap)
-		]
-		concat.newLineIfNotEmpty
 	}
 	
-	private def dispatch void generate(CodeBlock codeBlock, StringConcatenation concat,
+	private def dispatch void generate(UnorderedList unorderedList, StringConcatenation concat, int indent,
+			Map<Identifiable, String> idMap) {
+		concat.ensureEmptyLine(indent)
+		unorderedList.items.forEach[
+			concat.indent(indent)
+			concat += '*   '
+			contents.generateWithSeparation(concat, indent + 1, idMap)
+			concat.newLineIfNotEmpty
+		]
+		concat.ensureEmptyLine
+	}
+	
+	private def dispatch void generate(CodeBlock codeBlock, StringConcatenation concat, int indent,
 			Map<Identifiable, String> idMap) {
 		if (codeBlock.isInlineCode) {
 			concat += '`'
-			codeBlock.contents.get(0).generate(concat, idMap)
+			codeBlock.contents.get(0).generate(concat, indent, idMap)
 			concat += '`'
 		} else {
-			concat.ensureEmptyLine
+			concat.ensureEmptyLine(indent)
+			concat.indent(indent)
 			concat += '```'
 			if (codeBlock.language != null)
 				concat += codeBlock.language.name.toLowerCase
-			codeBlock.contents.forEach[generate(concat, idMap)]
+			codeBlock.contents.forEach[generate(concat, indent, idMap)]
+			concat.newLineIfNotEmpty
 			concat += '```'
-			concat.newLine
+			concat.ensureEmptyLine
 		}
 	}
 	
@@ -331,22 +341,22 @@ class MarkdownGenerator implements IGenerator {
 		}
 	}
 	
-	private def dispatch void generate(Code code, StringConcatenation concat,
+	private def dispatch void generate(Code code, StringConcatenation concat, int indent,
 			Map<Identifiable, String> idMap) {
-		concat += code.contents
+		concat += code.contents.replace('\\[', '[').replace('\\]', ']')
 	}
 	
-	private def dispatch void generate(Link link, StringConcatenation concat,
+	private def dispatch void generate(Link link, StringConcatenation concat, int indent,
 			Map<Identifiable, String> idMap) {
 		concat += '''[«link.text?.trim»](«link.url?.trim»)'''
 	}
 	
-	private def dispatch void generate(ImageRef imageRef, StringConcatenation concat,
+	private def dispatch void generate(ImageRef imageRef, StringConcatenation concat, int indent,
 			Map<Identifiable, String> idMap) {
 		concat += '''![«imageRef.caption?.trim»](«imageRef.path?.trim»)'''
 	}
 	
-	private def dispatch void generate(CodeRef codeRef, StringConcatenation concat,
+	private def dispatch void generate(CodeRef codeRef, StringConcatenation concat, int indent,
 			Map<Identifiable, String> idMap) {
 		concat += '['
 		if (codeRef.altText == null)
@@ -356,28 +366,30 @@ class MarkdownGenerator implements IGenerator {
 		concat += '''](«codeRef.element.gitLink»)'''
 	}
 	
-	private def dispatch void generate(Todo todo, StringConcatenation concat,
+	private def dispatch void generate(Todo todo, StringConcatenation concat, int indent,
 			Map<Identifiable, String> idMap) {
 		concat.newLineIfNotEmpty
 		concat += '''TODO «todo.text?.trim»'''
 		concat.newLine
 	}
 	
-	private def dispatch void generate(Table table, StringConcatenation concat,
+	private def dispatch void generate(Table table, StringConcatenation concat, int indent,
 			Map<Identifiable, String> idMap) {
 		if (!table.rows.empty) {
-			concat.ensureEmptyLine
+			concat.ensureEmptyLine(indent)
+			concat.indent(indent)
 			concat += '|'
-			table.rows.get(0).data.forEach[concat += '---|']
+			table.rows.get(0).data.forEach[concat += ':---|']
 			table.rows.forEach[
 				concat.newLine
+				concat.indent(indent)
 				concat += '|'
 				data.forEach[
-			  		contents.generateWithSeparation(concat, idMap)
+			  		contents.generateWithSeparation(concat, indent, idMap)
 			  		concat += '|'
 		  		]
 			]
-			concat.newLine
+			concat.ensureEmptyLine
 		}
 	}
 	
