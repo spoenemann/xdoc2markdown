@@ -66,6 +66,10 @@ class StringConcatenationExtensions {
 		}
 	}
 	
+	def startsWithNewline(CharSequence s) {
+		return s.length > 0 && s.charAt(0) == '\n'
+	}
+	
 	def endsWithNewline(CharSequence s) {
 		return s.length > 0 && s.charAt(s.length - 1) == '\n'
 	}
@@ -76,6 +80,26 @@ class StringConcatenationExtensions {
 	
 	def endsWithWhitespace(CharSequence s) {
 		return s.length > 0 && s.charAt(s.length - 1).isWhitespace
+	}
+	
+	def getIndentationAmount(CharSequence s) {
+		var result = -1
+		for (var i = 0; i < s.length; i++) {
+			if (s.charAt(i) == '\n') {
+				var ind = 0
+				while (i + ind + 1 < s.length && s.charAt(i + ind + 1) == ' ') {
+					ind++
+				}
+				if (ind == 0)
+					return 0
+				i = i + ind
+				if (result < 0)
+					result = ind
+				else
+					result = Math.min(result, ind)
+			}
+		}
+		return result
 	}
 	
 	def processEscapes(CharSequence s) {

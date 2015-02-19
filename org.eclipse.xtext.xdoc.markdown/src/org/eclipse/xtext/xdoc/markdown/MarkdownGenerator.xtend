@@ -16,7 +16,6 @@ import org.eclipse.emf.ecore.resource.Resource
 import org.eclipse.xtend2.lib.StringConcatenation
 import org.eclipse.xtext.generator.IFileSystemAccess
 import org.eclipse.xtext.generator.IGenerator
-import org.eclipse.xtext.xdoc.generator.util.GitExtensions
 import org.eclipse.xtext.xdoc.xdoc.Anchor
 import org.eclipse.xtext.xdoc.xdoc.Chapter
 import org.eclipse.xtext.xdoc.xdoc.ChapterRef
@@ -43,6 +42,8 @@ import org.eclipse.xtext.xdoc.xdoc.TextPart
 import org.eclipse.xtext.xdoc.xdoc.Todo
 import org.eclipse.xtext.xdoc.xdoc.UnorderedList
 import org.eclipse.xtext.xdoc.xdoc.XdocFile
+import org.eclipse.emf.ecore.util.EcoreUtil
+import com.google.common.base.Strings
 
 /**
  * An Xdoc generator that produces GitHub Flavored Markdown.
@@ -282,7 +283,7 @@ class MarkdownGenerator implements IGenerator {
 		ref.contents.forEach[generate(concat, indent, idMap)]
 		concat += ']('
 		concat += idMap?.get(ref.ref)
-		if (!(ref.ref instanceof Chapter)) {
+		if (!(ref.ref instanceof Chapter) || EcoreUtil.isAncestor(ref.ref, ref)) {
 			concat += '#'
 			concat += ref.ref.name?.trim
 		}
@@ -317,7 +318,7 @@ class MarkdownGenerator implements IGenerator {
 			Map<Identifiable, String> idMap) {
 		if (codeBlock.isInlineCode) {
 			concat += '`'
-			codeBlock.contents.get(0).generate(concat, indent, idMap)
+			codeBlock.contents.forEach[generate(concat, indent, idMap)]
 			concat += '`'
 		} else {
 			concat.ensureEmptyLine(indent)
@@ -325,20 +326,25 @@ class MarkdownGenerator implements IGenerator {
 			concat += '```'
 			if (codeBlock.language != null)
 				concat += codeBlock.language.name.toLowerCase
-			codeBlock.contents.forEach[generate(concat, indent, idMap)]
+			val codeConcat = new MyStringConcatenation('\n')
+			codeBlock.contents.forEach[generate(codeConcat, indent, idMap)]
+			if (!codeConcat.startsWithNewline)
+				concat.newLine
+			val codeIndent = 4 * indent - codeConcat.indentationAmount
+			if (codeIndent > 0)
+				concat.append(codeConcat, Strings.repeat(' ', codeIndent))
+			else
+				concat.append(codeConcat)
 			concat.newLineIfNotEmpty
+			if (indent > 0 && concat.endsWithNewline)
+				concat.indent(indent)
 			concat += '```'
 			concat.ensureEmptyLine
 		}
 	}
 	
 	private def isInlineCode(CodeBlock codeBlock) {
-		if (codeBlock.contents.size == 1) {
-			val content = codeBlock.contents.get(0)
-			if (content instanceof Code) {
-				return !content.contents.contains('\n')
-			}
-		}
+		codeBlock.contents.forall[it instanceof Code] && codeBlock.contents.map[it as Code].forall[!contents.contains('\n')]
 	}
 	
 	private def dispatch void generate(Code code, StringConcatenation concat, int indent,
@@ -348,12 +354,12 @@ class MarkdownGenerator implements IGenerator {
 	
 	private def dispatch void generate(Link link, StringConcatenation concat, int indent,
 			Map<Identifiable, String> idMap) {
-		concat += '''[«link.text?.trim»](«link.url?.trim»)'''
+		concat += '''[«link.text?.trim?.replaceAll('\\s+', ' ')»](«link.url?.trim»)'''
 	}
 	
 	private def dispatch void generate(ImageRef imageRef, StringConcatenation concat, int indent,
 			Map<Identifiable, String> idMap) {
-		concat += '''![«imageRef.caption?.trim»](«imageRef.path?.trim»)'''
+		concat += '''![«imageRef.caption?.trim?.replaceAll('\\s+', ' ')»](«imageRef.path?.trim»)'''
 	}
 	
 	private def dispatch void generate(CodeRef codeRef, StringConcatenation concat, int indent,
@@ -362,7 +368,7 @@ class MarkdownGenerator implements IGenerator {
 		if (codeRef.altText == null)
 			concat += codeRef.element.simpleName
 		else
-			concat += codeRef.altText
+			codeRef.altText.generate(concat, indent, idMap)
 		concat += '''](«codeRef.element.gitLink»)'''
 	}
 	
