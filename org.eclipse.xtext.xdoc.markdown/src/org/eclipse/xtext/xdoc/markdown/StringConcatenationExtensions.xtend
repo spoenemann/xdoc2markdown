@@ -8,6 +8,7 @@
 package org.eclipse.xtext.xdoc.markdown
 
 import org.eclipse.xtend2.lib.StringConcatenation
+import org.eclipse.xtext.xdoc.xdoc.Identifiable
 
 import static extension java.lang.Character.*
 
@@ -25,6 +26,11 @@ class StringConcatenationExtensions {
 	def +=(StringConcatenation concat, Object obj) {
 		concat.append(obj)
 		return concat
+	}
+	
+	def +=(StringBuilder builder, Object obj) {
+		builder.append(obj)
+		return builder
 	}
 	
 	def ensureEmptyLine(StringConcatenation concat, int indent) {
@@ -107,17 +113,40 @@ class StringConcatenationExtensions {
 		for (var i = 0; i < s.length; i++) {
 			val c = s.charAt(i)
 			if (c == '`')
-				result.append('\\`')
+				result += '\\`'
 			else if (c == '*')
-				result.append('\\*')
+				result += '\\*'
 			else if (c == '_')
-				result.append('\\_')
+				result += '\\_'
 			else if (c == '<')
-				result.append('\\<')
+				result += '\\<'
 			else if (c == '>')
-				result.append('\\>')
+				result += '\\>'
 			else
-				result.append(c)
+				result += c
+		}
+		return result.toString
+	}
+	
+	def getAnchor(Identifiable id) {
+		val result = new StringBuilder
+		var hyphen = false
+		for (var i = 0; i < id.name.length; i++) {
+			val c = id.name.charAt(i)
+			if (c.isLetterOrDigit) {
+				if (c.isUpperCase && !(i > 0 && id.name.charAt(i - 1).isUpperCase
+						&& (i == id.name.length - 1 || !id.name.charAt(i + 1).isLowerCase))) {
+					hyphen = true
+				}
+				if (hyphen) {
+					if (result.length > 0)
+						result += '-'
+					hyphen = false
+				}
+				result += c.toLowerCase
+			} else {
+				hyphen = true
+			}
 		}
 		return result.toString
 	}
